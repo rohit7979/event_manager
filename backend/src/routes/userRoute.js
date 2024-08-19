@@ -3,7 +3,7 @@ const { Router } = require("express");
 const userModel = require("../models/userModel");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const blacklistModel = require("../models/blackListModel");
+// const blacklistModel = require("../models/blackListModel");
 require("dotenv").config();
 const userRouter = Router();
 
@@ -86,7 +86,7 @@ userRouter.get("/logout", async (req, res) => {
 
     const token = header.split(" ")[1];
 
-    const blacklist = await blacklistModel.create({ token });
+    // const blacklist = await blacklistModel.create({ token });
     res.status(200).json({ message: "Logout successful" });
   } catch (err) {
     res.status(500).json({ message: "Internal server error" });
