@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const blacklistModel = require('../models/blackListModel');
+// const blacklistModel = require('../models/blackListModel');
 require('dotenv').config;
 
 const auth = async(req,res,next)=>{
@@ -10,11 +10,11 @@ const auth = async(req,res,next)=>{
     }
  
     const token = header.split(' ')[1];
-    const blacklistCheck = await blacklistModel.findOne({token:token});
+   //  const blacklistCheck = await blacklistModel.findOne({token:token});
 
-    if(blacklistCheck){
-      return res.json({message : "this token is balcklisted try to get the new token"})
-    }
+   //  if(blacklistCheck){
+   //    return res.json({message : "this token is balcklisted try to get the new token"})
+   //  }
 
    let decode = jwt.verify(token, process.env.SECRET_KEY,(err,result)=>{
          if(err){
