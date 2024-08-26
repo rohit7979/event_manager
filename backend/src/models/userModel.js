@@ -14,7 +14,8 @@ const userSchema = new Schema({
     enum: ["active", "disabled"],
     default: "active",
   },
-  // Optional: Add a field to track registered events if needed
+  notifications: { type: [String], default: [] }, 
+
   // registeredEvents: [{ type: Schema.Types.ObjectId, ref: 'events' }]
 });
 

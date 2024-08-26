@@ -28,7 +28,7 @@ userRouter.post("/register", async (req, res) => {
         username,
         email,
         password: hash,
-        role // Save role with user data
+        role 
       });
 
       await user.save();
@@ -55,7 +55,7 @@ userRouter.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
-    const payload = { email, role: user.role };  // Include role in the payload
+    const payload = { email, role: user.role };  
 
     const access_token = jwt.sign(
       payload,

@@ -1,54 +1,59 @@
-const { Router } = require("express");
-const eventModel = require("../models/eventModel");
-const userModel = require("../models/userModel");
-const role = require("../middlewares/role");
+const express = require('express');
 const { body, validationResult } = require('express-validator');
+const Event = require('../models/eventModel');
+const User = require('../models/userModel');
+const nodemailer = require('nodemailer');
+const nodeCron = require('node-cron');
+const io = require('socket.io')();
+const role  = require('../middlewares/role');
+const winston = require('winston');
+const morgan = require('morgan');
 
-const eventRouter = Router();
+const eventRouter = express.Router();
 
-// List events with pagination, sorting, and role-based access
-eventRouter.get("/list", async (req, res) => {
-    const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
-    const skip = (page - 1) * limit;
-    const sort = parseInt(req.query.sort) || 1; // 1 for ascending, -1 for descending
-    const query = {};
+const logger = winston.createLogger({
+    level: 'info',
+    format: winston.format.json(),
+    transports: [
+        new winston.transports.File({ filename: 'combined.log' }),
+    ],
+});
 
-    if (req.query.title) {
-        query.title = req.query.title;
-    }
+eventRouter.use(morgan('combined'));
 
+io.on('connection', (socket) => {
+    console.log('New client connected');
+
+    socket.on('disconnect', () => {
+        console.log('Client disconnected');
+    });
+});
+
+eventRouter.get('/list', role(['admin', 'organizer', 'user']), async (req, res) => {
     try {
-        const user = await userModel.findOne({ email: req.user.email });
-        let events;
-
-        if (user.role === 'admin' || user.role === 'organizer') {
-            // Admin and Organizer can see all events
-            events = await eventModel.find(query).skip(skip).limit(limit).sort({ startingdate: sort }).populate("creator");
-        } else if (user.role === 'user') {
-            // Users can only see their own created events
-            events = await eventModel.find({ ...query, creator: user.email }).skip(skip).limit(limit).sort({ startingdate: sort }).populate("creator");
-        } else {
-            return res.status(403).json({ message: "You are not authorized to view this list" });
-        }
+        const user = await User.findOne({ email: req.user.email });
+        const query = user.role === 'user' ? { creator: user.email } : {};
+        const events = await Event.find(query);
 
         res.status(200).json(events);
+
+        io.emit('eventListUpdated', events);
     } catch (err) {
-        console.error(err); // Log the error for debugging
-        res.status(500).json({ message: "Internal server error" });
+        logger.error('Error fetching events', err);
+        res.status(500).json({ message: 'Internal server error' });
     }
 });
 
-// Create an event (Organizer only)
+// Create an event
 eventRouter.post(
-    "/create",
-    role(['organizer', 'admin']),
+    '/create',
+    role(['organizer', 'admin','user']),
     [
-        body('title').isString().notEmpty().withMessage('Title is required'),
-        body('location').isString().notEmpty().withMessage('Location is required'),
+        body('title').notEmpty().withMessage('Title is required'),
+        body('location').notEmpty().withMessage('Location is required'),
         body('startingdate').isISO8601().withMessage('Starting date must be a valid date'),
         body('enddate').isISO8601().withMessage('End date must be a valid date'),
-        body('maxpeoples').isInt({ min: 1 }).withMessage('Max peoples must be a positive integer'),
+        body('maxpeoples').isInt({ min: 1 }).withMessage('Max people must be a positive integer')
     ],
     async (req, res) => {
         const errors = validationResult(req);
@@ -57,37 +62,47 @@ eventRouter.post(
         }
 
         const { title, location, startingdate, enddate, maxpeoples } = req.body;
-        const creator = req.user.email;
 
         try {
-            const event = new eventModel({
-                creator,
+            const newEvent = new Event({
+                creator: req.user.email,
                 title,
                 location,
                 startingdate,
                 enddate,
-                maxpeoples
+                maxpeoples,
+            });
+            await newEvent.save();
+
+            res.status(201).json({ message: 'Event created successfully' });
+
+            io.emit('newEventCreated', newEvent);
+
+            nodeCron.schedule(`0 0 ${new Date(startingdate).getDate() - 1} ${new Date(startingdate).getMonth()} *`, async () => {
+                await sendEmail({
+                    to: req.user.email,
+                    subject: 'Event Reminder',
+                    text: `Your event "${title}" is happening soon!`,
+                });
             });
 
-            await event.save();
-            res.status(201).json({ message: "Event created successfully" });
         } catch (err) {
-            console.error(err); // Log the error for debugging
-            res.status(500).json({ message: "Internal server error" });
+            logger.error('Error creating event', err);
+            res.status(500).json({ message: 'Internal server error' });
         }
     }
 );
 
-// Update an event (Organizer or Admin)
+// Update an event
 eventRouter.put(
-    "/update/:id",
+    '/update/:id',
     role(['organizer', 'admin']),
     [
-        body('title').optional().isString(),
-        body('location').optional().isString(),
+        body('title').optional(),
+        body('location').optional(),
         body('startingdate').optional().isISO8601(),
         body('enddate').optional().isISO8601(),
-        body('maxpeoples').optional().isInt({ min: 1 })
+        body('maxpeoples').optional().isInt({ min: 1 }),
     ],
     async (req, res) => {
         const errors = validationResult(req);
@@ -95,50 +110,68 @@ eventRouter.put(
             return res.status(400).json({ errors: errors.array() });
         }
 
-        const { id } = req.params;
-        const { title, location, startingdate, enddate, maxpeoples } = req.body;
-        const user_email = req.user.email;
-
         try {
-            const event = await eventModel.findById(id);
-
+            const event = await Event.findById(req.params.id);
             if (!event) {
-                return res.status(404).json({ message: "Event not found" });
+                return res.status(404).json({ message: 'Event not found' });
             }
 
-            if (event.creator !== user_email && req.user.role !== 'admin') {
-                return res.status(403).json({ message: "You are not authorized to update this event" });
+            if (event.creator !== req.user.email && req.user.role !== 'admin') {
+                return res.status(403).json({ message: 'You are not authorized to update this event' });
             }
 
-            if (title) event.title = title;
-            if (location) event.location = location;
-            if (startingdate) event.startingdate = startingdate;
-            if (enddate) event.enddate = enddate;
-            if (maxpeoples) event.maxpeoples = maxpeoples;
-
+            Object.assign(event, req.body);
             await event.save();
-            res.status(200).json({ message: "Event updated successfully" });
+
+            res.status(200).json({ message: 'Event updated successfully' });
+
+            // Emit real-time updates
+            io.emit('eventUpdated', event);
         } catch (err) {
-            console.error(err); // Log the error for debugging
-            res.status(500).json({ message: "Internal server error" });
+            logger.error('Error updating event', err);
+            res.status(500).json({ message: 'Internal server error' });
         }
     }
 );
 
-// Delete an event (Admin only)
-eventRouter.delete("/delete/:id", role(['admin']), async (req, res) => {
-    const { id } = req.params;
-
+// Delete an event
+eventRouter.delete('/delete/:id', role(['admin','user','organizer']), async (req, res) => {
     try {
-        const event = await eventModel.findByIdAndDelete(id);
+        const event = await Event.findByIdAndDelete(req.params.id);
         if (!event) {
-            return res.status(404).json({ message: "Event not found" });
+            return res.status(404).json({ message: 'Event not found' });
         }
-        res.status(200).json({ message: "Event deleted successfully" });
+
+        res.status(200).json({ message: 'Event deleted successfully' });
+
+        io.emit('eventDeleted', event);
     } catch (err) {
-        console.error(err); // Log the error for debugging
-        res.status(500).json({ message: "Internal server error" });
+        logger.error('Error deleting event', err);
+        res.status(500).json({ message: 'Internal server error' });
     }
 });
+
+async function sendEmail({ to, subject, text }) {
+    try {
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+                user: 'your-email@gmail.com',
+                pass: 'your-email-password',
+            },
+        });
+
+        await transporter.sendMail({
+            from: '"Event Management" <no-reply@eventmanagement.com>',
+            to,
+            subject,
+            text,
+        });
+
+        logger.info(`Email sent to ${to}`);
+    } catch (err) {
+        logger.error('Error sending email', err);
+    }
+}
 
 module.exports = eventRouter;
