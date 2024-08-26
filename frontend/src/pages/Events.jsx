@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import Navbar from "../components/Navbar";
+import EventList from "../components/EventList";
 
 export const CreateEvent = () => {
-  const [events, setEvents] = useState([]);
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
   const [startingDate, setStartingDate] = useState("");
@@ -11,26 +11,6 @@ export const CreateEvent = () => {
   const [token, setToken] = useState(localStorage.getItem("access_token") || "");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-
-  useEffect(() => {
-    if (!token) return;
-
-    fetch("http://localhost:8080/events/list", {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-      })
-      .then((data) => setEvents(data))
-      .catch((err) => setError("Failed to fetch events."));
-  }, [token]);
 
   const handleCreateEvent = (e) => {
     e.preventDefault();
@@ -56,7 +36,6 @@ export const CreateEvent = () => {
       })
       .then((data) => {
         setSuccess(data.message);
-        setEvents([...events, { title, location, startingdate: startingDate, enddate: endDate, maxpeoples: maxPeoples }]);
         setTitle("");
         setLocation("");
         setStartingDate("");
@@ -67,9 +46,13 @@ export const CreateEvent = () => {
       .catch((err) => setError(err.message || "Failed to create event."));
   };
 
+  const handleDeleteEvent = () => {
+    // This function can be used if needed to refresh event list or handle specific actions
+  };
+
   return (
     <div>
-      <Navbar/>
+      <Navbar />
       <h1>Create Event</h1>
 
       <form style={{ display: "flex", flexDirection: "column", gap: "10px" }} onSubmit={handleCreateEvent}>
@@ -109,19 +92,10 @@ export const CreateEvent = () => {
       {error && <p style={{ color: "red" }}>{error}</p>}
       {success && <p style={{ color: "green" }}>{success}</p>}
 
-      {events.length > 0 ? (
-        events.map((event) => (
-          <div key={event._id} style={{ display: "flex", flexDirection: "column", marginTop: "20px" }}>
-            <div><strong>Title:</strong> {event.title}</div>
-            <div><strong>Location:</strong> {event.location}</div>
-            <div><strong>Starting Date:</strong> {new Date(event.startingdate).toLocaleDateString()}</div>
-            <div><strong>End Date:</strong> {new Date(event.enddate).toLocaleDateString()}</div>
-            <div><strong>Max People:</strong> {event.maxpeoples}</div>
-          </div>
-        ))
-      ) : (
-        <div>No events found</div>
-      )}
+      {/* Render the EventList component with handleDeleteEvent callback */}
+      <EventList onDeleteEvent={handleDeleteEvent} />
     </div>
   );
 };
+
+export default CreateEvent;

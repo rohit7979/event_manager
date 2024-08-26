@@ -5,7 +5,7 @@ export const Signup = () => {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState('user'); // Default role is 'user'
+  const [role, setRole] = useState('user');
   const navigate = useNavigate();
 
   const handleSignup = async (e) => {
@@ -15,7 +15,7 @@ export const Signup = () => {
       const response = await fetch('http://localhost:8080/user/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, email, password, role }), // Include role
+        body: JSON.stringify({ username, email, password, role }), 
       });
 
       const result = await response.json();

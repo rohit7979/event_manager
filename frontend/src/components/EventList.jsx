@@ -1,61 +1,67 @@
-// import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from 'react';
 
-// export const EventList = () => {
-//   const [events, setEvents] = useState([]);
-//   const [token, setToken] = useState("");
-//   const [role, setRole] = useState("");
+const EventList = ({ onDeleteEvent }) => {
+  const [events, setEvents] = useState([]);
+  const [error, setError] = useState("");
 
-//   useEffect(() => {
-//     const token = localStorage.getItem("access_token");
-//     const role = localStorage.getItem("user_role");
-//     setToken(token);
-//     setRole(role);
+  useEffect(() => {
+    fetch("http://localhost:8080/events/list", {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("access_token") || ""}`,
+      },
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then((data) => setEvents(data))
+      .catch((err) => setError("Failed to fetch events."));
+  }, []);
 
-//     const fetchEvents = async () => {
-//       try {
-//         const response = await fetch("http://localhost:8080/events/list", {
-//           method: "GET",
-//           headers: {
-//             "Content-Type": "application/json",
-//             authorization: `Bearer ${token}`,
-//           },
-//         });
+  const handleDeleteEvent = (id) => {
+    fetch(`http://localhost:8080/events/delete/${id}`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("access_token") || ""}`,
+      },
+    })
+      .then((response) => {
+        if (!response.ok) {
+          return response.json().then((data) => Promise.reject(data));
+        }
+        return response.json();
+      })
+      .then((data) => {
+        setEvents(events.filter(event => event._id !== id));
+        onDeleteEvent(); // Callback to inform parent of the change
+      })
+      .catch((err) => setError(err.message || "Failed to delete event."));
+  };
 
-//         if (response.ok) {
-//           const data = await response.json();
-//           if (role === "user") {
-//             // Optionally, filter events if needed
-//             // Example: Filter events based on some criteria
-//           }
-//           setEvents(data);
-//         } else {
-//           console.error("Failed to fetch events");
-//         }
-//       } catch (err) {
-//         console.error(err);
-//       }
-//     };
+  return (
+    <div>
+      {error && <p style={{ color: "red" }}>{error}</p>}
+      {events.length > 0 ? (
+        events.map((event) => (
+          <div key={event._id} style={{ display: "flex", flexDirection: "column", marginTop: "20px" }}>
+            <div><strong>Title:</strong> {event.title}</div>
+            <div><strong>Location:</strong> {event.location}</div>
+            <div><strong>Starting Date:</strong> {new Date(event.startingdate).toLocaleDateString()}</div>
+            <div><strong>End Date:</strong> {new Date(event.enddate).toLocaleDateString()}</div>
+            <div><strong>Max People:</strong> {event.maxpeoples}</div>
+            <button onClick={() => handleDeleteEvent(event._id)}>Delete</button> {/* Delete button */}
+          </div>
+        ))
+      ) : (
+        <div>No events found</div>
+      )}
+    </div>
+  );
+};
 
-//     fetchEvents();
-//   }, [token, role]);
-
-//   return (
-//     <div>
-//       <h1>Event List</h1>
-//       {events.length > 0 ? (
-//         events.map((event) => (
-//           <div key={event._id} style={{ margin: "10px" }}>
-//             <h2>{event.title}</h2>
-//             <p>Location: {event.location}</p>
-//             <p>Start: {event.startingdate}</p>
-//             <p>End: {event.enddate}</p>
-//             <p>Max People: {event.maxpeoples}</p>
-//             {/* Add functionality based on role if needed */}
-//           </div>
-//         ))
-//       ) : (
-//         <div>No events found</div>
-//       )}
-//     </div>
-//   );
-// };
+export default EventList;

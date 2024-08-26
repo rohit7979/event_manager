@@ -49,3 +49,52 @@
   display: flex;
   flex-direction: column;
 }
+
+
+.notifications {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: #fff;
+  color: #000;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  width: 300px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.notification {
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+}
+
+.notification:last-child {
+  border-bottom: none;
+}
+
+
+.navbar {
+  padding: 10px;
+  background-color: #282c34;
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.navbar-brand {
+  font-size: 24px;
+  font-weight: bold;
+}
+
+.navbar-button {
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+}
